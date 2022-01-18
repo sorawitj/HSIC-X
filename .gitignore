@@ -134,4 +134,7 @@ dmypy.json
 
 # ignore results and logging folders
 results/
+results_backup/
+backup/
 lightning_logs/
+DeepGMM/
