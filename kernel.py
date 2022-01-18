@@ -1,26 +1,14 @@
 import torch
-from pyro.contrib.gp.kernels import RBF, Polynomial
-from pyro.nn import PyroModule
 import torch.nn.functional as F
 
 from utils import to_torch
 
 
-class Kernels(PyroModule):
+class Kernels(torch.nn.Module):
     def __init__(self, kernel_e, kernel_z):
         super().__init__()
         self.e = kernel_e
         self.z = kernel_z
-
-
-class RBFKernel(RBF):
-    def __init__(self, sigma=1, input_dim=1):
-        super().__init__(input_dim, lengthscale=to_torch(sigma))
-        self.lengthscale_unconstrained.requires_grad_(False)
-        self.variance_unconstrained.requires_grad_(False)
-
-    def set_kernel_param(self, sigma=None):
-        self.lengthscale = to_torch(sigma)
 
 
 class PTKGauss(torch.nn.Module):
@@ -64,7 +52,7 @@ class PTKGauss(torch.nn.Module):
         return K
 
 
-class CategoryKernel(PyroModule):
+class CategoryKernel(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
@@ -75,19 +63,3 @@ class CategoryKernel(PyroModule):
         Z = F.one_hot(Z, num_classes=Z_unique.size(0))
         ret = (Z @ Z.T).to(torch.float)
         return ret
-
-
-class PolyKernel(PyroModule):
-    def __init__(self, degree=2, s_z=None):
-        super().__init__()
-        self.kernel_e = Polynomial(1, degree=degree, bias=to_torch(0.))
-        self.kernel_e.bias_unconstrained.requires_grad_(False)
-        self.kernel_e.variance_unconstrained.requires_grad_(False)
-        if s_z is None:
-            self.kernel_z = Polynomial(1, degree=degree, bias=to_torch(0.))
-            self.kernel_z.bias_unconstrained.requires_grad_(False)
-            self.kernel_z.variance_unconstrained.requires_grad_(False)
-        else:
-            self.kernel_z = RBF(1, lengthscale=to_torch(s_z))
-            self.kernel_z.lengthscale_unconstrained.requires_grad_(False)
-            self.kernel_z.variance_unconstrained.requires_grad_(False)

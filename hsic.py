@@ -1,7 +1,7 @@
 import torch
 
 
-#
+
 def pairwise_distances(x):
     # x should be two dimensional
     instances_norm = torch.sum(x ** 2, -1).reshape((-1, 1))

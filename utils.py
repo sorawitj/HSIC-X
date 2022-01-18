@@ -135,8 +135,8 @@ def med_sigma(x):
         x = x[:, np.newaxis]
 
     # return 4 * np.sqrt(np.median(pdist(x, 'sqeuclidean')))
-    # return np.sqrt(np.median(pdist(x, 'sqeuclidean')) * .5)
-    return 4 * np.sqrt(np.median(pdist(x, 'sqeuclidean')))
+    return np.sqrt(np.median(pdist(x, 'sqeuclidean')) * .5)
+    # return 4 * np.sqrt(np.median(pdist(x, 'sqeuclidean')))
 
 
 def get_med_sigma(hsic_net, data, s_z=False):

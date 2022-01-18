@@ -1,6 +1,6 @@
 from torch.utils.data import TensorDataset
 from hsic import *
-from kernel import PolyKernel, RBFKernel, CategoryKernel, PTKGauss
+from kernel import CategoryKernel, PTKGauss
 from model import LinearModel, MedianHeuristic, Poly2SLS, PvalueLog, PolyModel, NonlinearModel, RadialModel, Radial2SLS, \
     Radial2SLSRidge, PredPolyRidge, PredRadialRidge
 import pytorch_lightning as pl
@@ -24,15 +24,15 @@ max_epoch_hsic = {'linear': 200, 'radial': 400}
 num_restart = 4
 
 for fn in ['linear']:
-# for fn in ['radial']:
-# for fn in ['radial', 'linear']:
+    # for fn in ['radial']:
+    # for fn in ['radial', 'linear']:
     if fn == 'linear':
         f = lambda x: -2 * x
     else:
         f = gen_radial_fn(num_basis=num_basis, data_limits=data_limits)
     # for instrument in ['Binary', 'Gaussian']:
     for instrument in ['Gaussian']:
-    #     for var_effect in [True, False]:
+        #     for var_effect in [True, False]:
         for var_effect in [True]:
 
             res_df = pd.DataFrame(columns=['f_x', 'Pred', 'IND', '2SLS', 'Oracle', 'alpha', 'run_id'])
@@ -124,7 +124,7 @@ for fn in ['linear']:
                                                num_basis=num_basis,
                                                data_limits=data_limits,
                                                lr=lr,
-                                               lmd=0.00025, # 0.0005
+                                               lmd=0.00025,  # 0.0005
                                                gamma=0.0,  # 0.05
                                                kernel_e=kernel_e,
                                                kernel_z=kernel_z,

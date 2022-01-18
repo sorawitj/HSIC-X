@@ -5,15 +5,14 @@ import torch.nn as nn
 from sklearn.multioutput import MultiOutputRegressor
 from torch.optim.lr_scheduler import StepLR
 from statsmodels.tools.tools import add_constant
-from DeepGMM.models.cnn_models import DefaultCNN
 from collections import OrderedDict
 from hsic import HSIC
 import numpy as np
 import pytorch_lightning as pl
-from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.linear_model import Ridge
 
-from kernel import RBFKernel, Kernels, CategoryKernel, PTKGauss
-from utils import dhsic_test, get_med_sigma, optimize_pval, med_sigma, radial_torch, radial, to_torch
+from kernel import Kernels, CategoryKernel, PTKGauss
+from utils import dhsic_test, get_med_sigma, optimize_pval, radial_torch, radial, to_torch
 from statsmodels.sandbox.regression.gmm import LinearIVGMM
 
 
@@ -244,22 +243,22 @@ class NonlinearModel(HSICModel):
         )
 
 
-class CNNModel(HSICModel):
-    def __init__(self, input_dim,
-                 lmd=0, gamma=0,
-                 lr=1e-4,
-                 kernel_e=None,
-                 kernel_z=None):
-        super(CNNModel, self).__init__(input_dim, lmd, gamma, lr, kernel_e, kernel_z)
-
-    def initialize(self):
-        self.cnn = DefaultCNN(cuda=False)
-
-    def forward(self, X):
-        return self.cnn(X)
-
-    def load_state_dict(self, module, **kwargs):
-        self.cnn.load_state_dict(module.cnn.state_dict())
+# class CNNModel(HSICModel):
+#     def __init__(self, input_dim,
+#                  lmd=0, gamma=0,
+#                  lr=1e-4,
+#                  kernel_e=None,
+#                  kernel_z=None):
+#         super(CNNModel, self).__init__(input_dim, lmd, gamma, lr, kernel_e, kernel_z)
+#
+#     def initialize(self):
+#         self.cnn = DefaultCNN(cuda=False)
+#
+#     def forward(self, X):
+#         return self.cnn(X)
+#
+#     def load_state_dict(self, module, **kwargs):
+#         self.cnn.load_state_dict(module.cnn.state_dict())
 
 
 class PredPolyRidge(object):
