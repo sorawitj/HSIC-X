@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from scipy.spatial.distance import pdist
+from torch.utils.data import TensorDataset
 from tqdm import tqdm
 import rpy2.robjects.packages as packages
 import pytorch_lightning as pl
@@ -46,7 +47,23 @@ def gen_radial_fn(num_basis, data_limits=(-5, 5)):
     return lambda x: radial(x, num_basis=num_basis, data_limits=data_limits) @ w
 
 
-# plt.scatter(x, y)
+def sample_cov_matrix(d, k, seed, ind=False, var_diff=True):
+    rand_state = np.random.RandomState(seed)
+    if ind:
+        cov = np.eye(d)
+    else:
+        W = rand_state.randn(d, k)
+        S = W.dot(W.T) + np.diag(rand_state.rand(d))
+        inv_std = np.diag(1. / np.sqrt(np.diag(S)))
+        cov = inv_std @ S @ inv_std
+
+    if var_diff:
+        var = rand_state.uniform(0.5, 3, size=(d,))
+        std = np.diag(np.sqrt(var))
+        cov = std @ cov @ std
+
+    return cov
+
 
 def gen_data(f, n, iv_type='mean', alpha=1, var_effect=True, debug=False, oracle=False):
     U = rnorm(n)
@@ -96,20 +113,12 @@ def gen_data(f, n, iv_type='mean', alpha=1, var_effect=True, debug=False, oracle
 
 
 def gen_data_multi(f, n, x_dim, z_dim, iv_type='Gaussian', alpha=1, oracle=False):
-    # U = rnorm_d(n, u_dim)
     U = rnorm(n)
-    # bUx = np.random.RandomState(0).uniform(-2, 2, size=(u_dim, x_dim))
-    # bUy = np.random.RandomState(1).uniform(-6, 6, size=(u_dim,))
     e_y = rnorm(n)
     e_x = rnorm_d(n, x_dim)
-    # rep_ex = np.repeat(e_x, z_dim, axis=1).reshape(n, x_dim, -1)
-    # bZ1 = np.random.RandomState(2).uniform(-4, 4, size=(z_dim, x_dim))
-    # bZ1 = np.random.RandomState(5).normal(0, 2, size=(z_dim, x_dim))
-    bZ1 = np.ones(shape=(z_dim, x_dim))
-    # bZ2 = np.random.RandomState(3).uniform(-4, 4, size=(z_dim, x_dim))
-    # bZ2 = np.random.RandomState(10).normal(0, 2., size=(z_dim, x_dim))
-    bZ2 = np.ones(shape=(z_dim, x_dim))
-    # bZ2 = np.ones(shape=(z_dim, x_dim))
+
+    bZ1 = np.random.RandomState(5).uniform(-4, 4, size=(z_dim, x_dim))
+    bZ2 = .5 * np.ones(shape=(z_dim, x_dim))
 
     if oracle:
         g = 0
@@ -120,12 +129,15 @@ def gen_data_multi(f, n, x_dim, z_dim, iv_type='Gaussian', alpha=1, oracle=False
         Z = rnorm_d(n, z_dim)
     elif iv_type == 'mix_Binary':
         Z = (-2) ** np.random.binomial(1, p=np.repeat(1 / 3, z_dim), size=(n, z_dim))
+    elif iv_type == 'mix_CorGaussian':
+        cov = sample_cov_matrix(z_dim, z_dim, seed=0,
+                                ind=True, var_diff=False)
+        Z = rnorm_d(n, z_dim, mean=np.zeros(z_dim), cov=cov)
     else:
         raise Exception('Invalid iv_type {}'.format(iv_type))
 
-    X = e_x * (Z @ bZ2) + g * U[:, np.newaxis] + alpha * Z @ bZ1
-    # X = g * Z @ bZ2 * U[:, np.newaxis] + alpha * Z @ bZ1 + e_x
-    Y = f(X) - 4 * U + e_y  # linear
+    X = e_x * (Z ** 2 @ bZ2) + g * U[:, np.newaxis] + alpha * Z @ bZ1
+    Y = f(X) - 2 * U + e_y  # linear
 
     return X, Y, Z
 
@@ -134,9 +146,8 @@ def med_sigma(x):
     if x.ndim == 1:
         x = x[:, np.newaxis]
 
-    # return 4 * np.sqrt(np.median(pdist(x, 'sqeuclidean')))
     return np.sqrt(np.median(pdist(x, 'sqeuclidean')) * .5)
-    # return 4 * np.sqrt(np.median(pdist(x, 'sqeuclidean')))
+    # return np.median(pdist(x, 'sqeuclidean')) * .5
 
 
 def get_med_sigma(hsic_net, data, s_z=False):
@@ -152,10 +163,11 @@ def rnorm(n):
     return np.random.normal(size=n)
 
 
-def rnorm_d(n, d):
-    mean = np.zeros(shape=(d,))
-    cov = np.eye(d)
-    return np.random.multivariate_normal(mean, cov, size=n)
+def rnorm_d(n, d, mean=None, cov=None):
+    if mean is None:
+        return np.random.normal(size=(n, d))
+    else:
+        return np.random.multivariate_normal(mean, cov, size=n)
 
 
 def to_torch(arr):
@@ -244,21 +256,27 @@ def get_loss_landscape_poly(hsic_net, data, grid_size=50):
     return param_grid, loss, grad_u, grad_v
 
 
-def dhsic_test(X, Y, kernel=["gaussian", "gaussian"], s_x=None, s_y=None, method="gamma", B=10):
+def dhsic_test(X, Y, kernel=["gaussian", "gaussian"],
+               s_x=None, s_y=None, method="gamma", B=10,
+               statistics=False):
     if X.ndim == 1:
         X = X[:, np.newaxis]
     if Y.ndim == 1:
         Y = Y[:, np.newaxis]
     if s_x is None:
-        pval = dHSIC.dhsic_test(X=X, Y=Y,
-                                method=method, kernel=kernel,
-                                B=B).rx2("p.value")[0]
+        res = dHSIC.dhsic_test(X=X, Y=Y,
+                               method=method, kernel=kernel,
+                               B=B)
     else:
-        pval = dHSIC.dhsic_test(X=X, Y=Y,
-                                B=B, method=method,
-                                kernel='gaussian.fixed',
-                                bandwidth=(s_x, s_y)).rx2("p.value")[0]
-    return pval
+        res = dHSIC.dhsic_test(X=X, Y=Y,
+                               B=B, method=method,
+                               kernel='gaussian.fixed',
+                               bandwidth=(s_x, s_y))
+    if statistics:
+        ret = res.rx2('p.value')[0], res.rx2('statistic')[0]
+    else:
+        ret = res.rx2('p.value')[0]
+    return ret
 
 
 def dhsic(X, Y, kernel=["gaussian", "gaussian"]):
@@ -275,9 +293,13 @@ def fit_restart(trainloader, hsic_net, pval_callback, max_epochs, se_callback=No
     max_pval = 0.0
     best_model = None
     for i in range(num_restart):
-        # restart params
-        hsic_net.initialize()
-        trainer = pl.Trainer(max_epochs=max_epochs, callbacks=[se_callback, pval_callback])
+        # only restart params after the first iterations
+        if i > 0:
+            print("restart")
+            hsic_net.initialize()
+        trainer = pl.Trainer(max_epochs=max_epochs, callbacks=[se_callback, pval_callback],
+                             enable_checkpointing=False, enable_model_summary=False, log_every_n_steps=100,
+                             enable_progress_bar=True)
         trainer.fit(hsic_net, trainloader)
         pval = pval_callback.p_value
         if pval < alpha:

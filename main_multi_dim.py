@@ -1,7 +1,12 @@
+import functools
+
+from joblib import Parallel, delayed
 from scipy.spatial.distance import pdist
 from torch.utils.data import TensorDataset
+from tqdm import tqdm
+
 from hsic import *
-from kernel import CategoryKernel, PTKGauss
+from kernel import CategoryKernel, RBFKernel
 from model import LinearModel, MedianHeuristic, Poly2SLS, PvalueLog, PolyModel, NonlinearModel, RadialModel, Radial2SLS, \
     Radial2SLSRidge, PredPolyRidge, PolySLSRidge
 import pandas as pd
@@ -14,24 +19,23 @@ np.random.seed(1)
 compare_mode = True
 n_rep = 10
 n = 1000
-max_epoch_hsic = {'linear': 300, 'radial': 400}
+max_epoch_hsic = {'linear': 200, 'radial': 400}
 # max_epoch_mse = {'linear': 100, 'radial': 300}
 num_restart = 1
 
 np.random.seed(1)
-x_dim = 1
+x_dim = 5
 z_dim = 5
 # u_dim = 2
-# w = np.random.normal(0, 2, size=(x_dim, 1))
-w = np.array([[-2]])
-# f = lambda x: (x @ w).flatten()
+w = np.random.normal(0, 2, size=(x_dim, 1))
+# w = np.array([[-2]])
 f = lambda x: (x @ w).flatten()
 
 fn = 'linear'
 for instrument in ['Gaussian']:
     # for instrument in ['Gaussian', 'Binary']:
-    res_df = pd.DataFrame(columns=['f_x', 'Pred', 'IND', '2SLS', 'Oracle', 'alpha', 'z_dim', 'run_id'])
-
+    # res_df = pd.DataFrame(columns=['f_x', 'Pred', 'IND', '2SLS', 'Oracle', 'alpha', 'z_dim', 'run_id'])
+    res_df = None
     # get a fix x_vis
     iv_type = 'mix_{}'.format(instrument)
     # iv_type = 'mean'
@@ -41,13 +45,16 @@ for instrument in ['Gaussian']:
     # lr_s = np.linspace(5e-2, 2e-1, 5)
     # lr_s = [5e-2, 7e-2, 9e-2, 1e-1, 2e-1]
     lr_s = [5e-2, 5e-2, 5e-2, 5e-2, 5e-2]
-    alphas = [.4]
-    lr_s = [5e-2]
+    alphas = [1.0]
+    lr_s = [1e-1]
     for z_dim in [1, 2, 3, 4, 5]:
         for j in range(len(alphas)):
             alpha = alphas[j]
             lr = lr_s[j]
-            for i in range(n_rep):
+
+
+            # for i in range(n_rep):
+            def rep_function(i):
                 X, Y, Z = gen_data_multi(f, n, x_dim, z_dim, iv_type, alpha=alpha, oracle=False)
                 X_o, Y_o, _ = gen_data_multi(f, n, x_dim, z_dim, iv_type, alpha=alpha, oracle=True)
                 X_test, _, _ = gen_data_multi(f, int(10e4), x_dim, z_dim, iv_type, alpha=alpha, oracle=False)
@@ -71,18 +78,17 @@ for instrument in ['Gaussian']:
 
                 # kernels = PolyKernel(degree=1)
                 # kernel_e = RBFKernel(sigma=1)
-                kernel_e = PTKGauss(sigma=1)
+                kernel_e = RBFKernel(sigma=1)
                 if instrument == 'Binary':
                     kernel_z = CategoryKernel()
                 else:
                     # kernel_z = RBFKernel(sigma=s_z)
-                    kernel_z = PTKGauss(sigma=s_z)
+                    kernel_z = RBFKernel(sigma=s_z)
                 # hsic_net = NonlinearModel(1, 5e3, 1e-2, kernel_e, kernel_z)
                 if fn == 'linear':
                     hsic_net = LinearModel(input_dim=x_dim,
                                            lr=lr,
                                            lmd=0.0,
-                                           gamma=0.0,  # 0.05
                                            kernel_e=kernel_e,
                                            kernel_z=kernel_z,
                                            bias=False)
@@ -92,7 +98,6 @@ for instrument in ['Gaussian']:
                                            data_limits=data_limits,
                                            lr=lr,
                                            lmd=0.003,
-                                           gamma=0.0,  # 0.05
                                            kernel_e=kernel_e,
                                            kernel_z=kernel_z,
                                            bias=False)
@@ -135,7 +140,7 @@ for instrument in ['Gaussian']:
 
                 poly2SLS.fit(X, Y, Z)
 
-                inner_df = pd.DataFrame(columns=res_df.columns)
+                inner_df = pd.DataFrame()
 
                 inner_df['f_x'] = f(X_test)
                 inner_df['Pred'] = y_hat_mse
@@ -146,7 +151,17 @@ for instrument in ['Gaussian']:
                 inner_df['z_dim'] = z_dim
                 inner_df['run_id'] = i
 
-                res_df = res_df.append(inner_df, ignore_index=True)
+                return inner_df
+                # res_df = res_df.append(inner_df, ignore_index=True)
+
+
+            ret_df = Parallel(n_jobs=5)(
+                delayed(rep_function)(i=i) for i in range(n_rep))
+            ret_df = functools.reduce(lambda df1, df2: df1.append(df2, ignore_index=True), ret_df)
+            if res_df is None:
+                res_df = ret_df
+            else:
+                res_df = res_df.append(ret_df, ignore_index=True)
 
     if compare_mode:
         melt_res_df = res_df.melt(id_vars=['f_x', 'z_dim', 'alpha', 'run_id'], var_name='model',
@@ -164,7 +179,8 @@ for instrument in ['Gaussian']:
         g.fig.get_axes()[0].set_yscale('log')
 
         plt.title("Model: {}, Instrument: {}".format(fn, instrument))
-        # # plt.ylim(1e-2, 1e4)
-        # plt.tight_layout()
-        # plt.savefig('results/compare_df_multidim_fn__{}_ins_{}.pdf'.format(fn, instrument))
-        # plt.close()
+        # plt.ylim(1e-2, 1e4)
+        plt.tight_layout()
+        plt.savefig(
+            'results/Z_compare_df_multidim_fn_{}_ins_{}_alpha_{}_xdim_{}.pdf'.format(fn, instrument, alpha, x_dim))
+        plt.close()
