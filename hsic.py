@@ -10,7 +10,7 @@ def HSIC(x, y, kernel_x, kernel_y, K=None, L=None):
     if y.dim() == 1:
         y = y.view(y.size(0), -1)
 
-    m, _ = x.shape  # batch size
+    m, _ = x.shape
 
     if K is None:
         K = kernel_x(x)
@@ -25,12 +25,12 @@ def HSIC(x, y, kernel_x, kernel_y, K=None, L=None):
 
 def hsic_perm_test(X, Y, kernel_x, kernel_y, B=100):
     X, Y = to_torch(X).detach(), to_torch(Y).detach()
-    
+
     if X.dim() == 1:
         X = X.view(X.size(0), -1)
     if Y.dim() == 1:
         Y = Y.view(Y.size(0), -1)
-        
+
     # compute kernel matrices
     Kx = kernel_x(X)
     Ky = kernel_y(Y)

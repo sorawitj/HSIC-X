@@ -241,45 +241,22 @@ class NonlinearModel(HSICModel):
         )
 
 
-# class CNNModel(HSICModel):
-#     def __init__(self, input_dim,
-#                  lmd=0, gamma=0,
-#                  lr=1e-4,
-#                  kernel_e=None,
-#                  kernel_z=None):
-#         super(CNNModel, self).__init__(input_dim, lmd, gamma, lr, kernel_e, kernel_z)
-#
-#     def initialize(self):
-#         self.cnn = DefaultCNN(cuda=False)
-#
-#     def forward(self, X):
-#         return self.cnn(X)
-#
-#     def load_state_dict(self, module, **kwargs):
-#         self.cnn.load_state_dict(module.cnn.state_dict())
-
-
 class PredPolyRidge(object):
     def __init__(self, degree, alpha=0.2, bias=False):
         self.degree = degree
         self.bias = bias
         self.alpha = alpha
         if alpha == 0:
-            self.reg = LinearRegression(fit_intercept=False)
+            self.reg = LinearRegression(fit_intercept=self.bias)
         else:
-            self.reg = Ridge(fit_intercept=False, alpha=self.alpha)
+            self.reg = Ridge(fit_intercept=self.bias, alpha=self.alpha)
 
     def make_features(self, X):
         """Builds features i.e. a matrix with columns [x, x^2, x^3, x^4]."""
         if X.ndim == 1:
             X = X[:, np.newaxis]
-        # add a column of one if bias is True
-        if self.bias:
-            start = 0
-        else:
-            start = 1
 
-        return np.concatenate([X ** i for i in range(start, self.degree + 1)], 1)
+        return np.concatenate([X ** i for i in range(1, self.degree + 1)], 1)
 
     def fit(self, X, Y):
         # 2SLS
@@ -477,6 +454,7 @@ def train_HSIC_IV(hsic_net, config, X, Y, Z, verbose=True):
                            num_restart=num_restart, verbose=verbose)
 
     return hsic_net
+
 
 def train_mse(mse_net, config, X, Y, Z):
     batch_size = config['batch_size']

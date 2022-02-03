@@ -1,11 +1,11 @@
 import numpy as np
 import torch
 from scipy.spatial.distance import pdist
-from torch.utils.data import TensorDataset
 from tqdm import tqdm
 import rpy2.robjects.packages as packages
 import pytorch_lightning as pl
 from rpy2.robjects import numpy2ri
+
 numpy2ri.activate()
 
 dHSIC = packages.importr("dHSIC")
@@ -148,7 +148,7 @@ def gen_data_multi(f, n, x_dim, z_dim, iv_type='Gaussian', alpha=1, oracle=False
 def med_sigma(x):
     if x.ndim == 1:
         x = x[:, np.newaxis]
-    
+
     return np.sqrt(np.median(pdist(x, 'sqeuclidean')) * .5)
 
 
@@ -291,14 +291,16 @@ def dhsic(X, Y, kernel=["gaussian", "gaussian"]):
     return res
 
 
-def fit_restart(trainloader, hsic_net, pval_callback, max_epochs, se_callback=None, num_restart=10, alpha=0.05, verbose=True):
+def fit_restart(trainloader, hsic_net, pval_callback, max_epochs, se_callback=None, num_restart=10, alpha=0.05,
+                verbose=True):
     max_pval = 0.0
     best_model = None
     for i in range(num_restart):
         # only restart params after the first iterations
         if i > 0:
             hsic_net.initialize()
-        trainer = pl.Trainer(max_epochs=max_epochs, callbacks=[se_callback, pval_callback], enable_checkpointing=False, enable_model_summary=False, log_every_n_steps=100, enable_progress_bar=verbose)
+        trainer = pl.Trainer(max_epochs=max_epochs, callbacks=[se_callback, pval_callback], enable_checkpointing=False,
+                             enable_model_summary=False, log_every_n_steps=100, enable_progress_bar=verbose)
         trainer.fit(hsic_net, trainloader)
         pval = pval_callback.p_value
         if pval < alpha:
