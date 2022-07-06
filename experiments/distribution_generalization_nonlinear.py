@@ -4,11 +4,14 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from kernel import RBFKernel
-from model import PredPolyRidge, LinearModel, train_HSIC_IV, NonlinearModel, train_mse
 from rpy2.robjects import numpy2ri
 from rpy2.robjects import pandas2ri
 import rpy2.robjects.packages as packages
+
+from helpers.trainer import train_mse, train_HSIC_IV
+from models.baselines import PredPolyRidge
+from models.hsicx import NNHSICX, LinearHSICX
+from models.kernel import RBFKernel
 
 pandas2ri.activate()
 numpy2ri.activate()
@@ -52,9 +55,9 @@ def get_res_nonlinear(n, intvec, f, config_hsic, config_me):
     X_features = radial2D(X, centres)
 
     # # fit OLS
-    ols_net = NonlinearModel(input_dim=2,
-                             lr=1e-2,
-                             lmd=-99)
+    ols_net = NNHSICX(input_dim=2,
+                      lr=1e-2,
+                      lmd=-99)
     ols_net = train_mse(ols_net, config_me, X, Y, Z)
 
     ols_basis = PredPolyRidge(1, alpha=0, bias=True)
@@ -67,17 +70,17 @@ def get_res_nonlinear(n, intvec, f, config_hsic, config_me):
     kernel_e = RBFKernel(sigma=1)
     kernel_z = RBFKernel(sigma=1)
 
-    hsic_net = NonlinearModel(input_dim=2,
-                              lr=config_hsic['lr'],
-                              lmd=config_hsic['lmd'],
-                              kernel_e=kernel_e,
-                              kernel_z=kernel_z)
+    hsic_net = NNHSICX(input_dim=2,
+                       lr=config_hsic['lr'],
+                       lmd=config_hsic['lmd'],
+                       kernel_e=kernel_e,
+                       kernel_z=kernel_z)
 
     hsic_net.load_state_dict(ols_net)
     hsic_net = train_HSIC_IV(hsic_net, config_hsic, X, Y, Z)
     intercept_adjust = Y.mean() - hsic_net(X).mean()
 
-    hsic_basis = LinearModel(input_dim=10,
+    hsic_basis = LinearHSICX(input_dim=10,
                              lr=config_hsic['lr'],
                              lmd=config_hsic['lmd'],
                              kernel_e=kernel_e,
@@ -139,7 +142,6 @@ def get_res_nonlinear(n, intvec, f, config_hsic, config_me):
 def radial2D(X, centres):
     Phi = np.zeros((X.shape[0], num_basis))
     for i in range(num_basis):
-        # sigma = np.median(np.linalg.norm(x - centres[i]))
         Phi[:, i:i + 1] = np.exp(-1 * (np.linalg.norm(X - centres[i], axis=1, keepdims=True) / 3) ** 2)
 
     return Phi
@@ -182,7 +184,7 @@ if __name__ == "__main__":
     pd.to_csv(melt_res_df, "DG_compare_df_nonlin.csv", index=False)
     # plotting
     # loading linear result to plot together
-    melt_lin = pd.read_csv("results/DG_compare_df.csv")
+    melt_lin = pd.read_csv("../results/DG_compare_df.csv")
     melt_lin[r'$f$'] = 'Linear'
     melt_res_df[r'$f$'] = 'Non-linear'
 

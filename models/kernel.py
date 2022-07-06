@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-from utils import to_torch
+from helpers.utils import to_torch
 
 
 class Kernels(torch.nn.Module):
@@ -43,10 +43,11 @@ class CategoryKernel(torch.nn.Module):
             Z = F.one_hot(Z, num_classes=Z_unique.size(0))
             ret = (Z @ Z.T).to(torch.float)
         else:
-            ret = torch.nn.functional.cosine_similarity(Z[:,:,None], Z.t()[None,:,:])
-            # ret = (ret == 1).to(torch.float)
-        # ret = torch.nn.functional.cosine_similarity(Z[:,:,None], Z.t()[None,:,:])
+            print(Z.shape)
+            ret = torch.nn.functional.cosine_similarity(Z[:, :, None], Z.t()[None, :, :])
+
         return ret
+
 
 class ProductKernel3(torch.nn.Module):
 
@@ -60,12 +61,12 @@ class ProductKernel3(torch.nn.Module):
         self.d3 = d3
 
     def forward(self, X):
-  
         K1 = self.k1(X[:, self.d1])
         K2 = self.k2(X[:, self.d2])
         K3 = self.k3(X[:, self.d3])
         return K1 * K2 * K3
-    
+
+
 class ProductKernel2(torch.nn.Module):
 
     def __init__(self, k1, k2, d1, d2):
@@ -76,7 +77,6 @@ class ProductKernel2(torch.nn.Module):
         self.d2 = d2
 
     def forward(self, X):
-  
         K1 = self.k1(X[:, self.d1])
         K2 = self.k2(X[:, self.d2])
         return K1 * K2

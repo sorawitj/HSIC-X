@@ -1,7 +1,10 @@
-import torch
 import numpy as np
+import torch
+from helpers.utils import to_torch
+from rpy2.robjects import numpy2ri, packages
 
-from utils import to_torch
+numpy2ri.activate()
+dHSIC = packages.importr("dHSIC")
 
 
 def HSIC(x, y, kernel_x, kernel_y, K=None, L=None):
@@ -52,3 +55,36 @@ def hsic_perm_test(X, Y, kernel_x, kernel_y, B=100):
     p_value = np.mean(hsic_perm > hsic)
 
     return p_value, hsic
+
+
+def dhsic_test(X, Y, kernel=["gaussian", "gaussian"],
+               s_x=None, s_y=None, method="gamma", B=10,
+               statistics=False):
+    if X.ndim == 1:
+        X = X[:, np.newaxis]
+    if Y.ndim == 1:
+        Y = Y[:, np.newaxis]
+    if s_x is None:
+        res = dHSIC.dhsic_test(X=X, Y=Y,
+                               method=method, kernel=kernel,
+                               B=B)
+    else:
+        res = dHSIC.dhsic_test(X=X, Y=Y,
+                               B=B, method=method,
+                               kernel='gaussian.fixed',
+                               bandwidth=(s_x, s_y))
+    if statistics:
+        ret = res.rx2('p.value')[0], res.rx2('statistic')[0]
+    else:
+        ret = res.rx2('p.value')[0]
+    return ret
+
+
+def dhsic(X, Y, kernel=["gaussian", "gaussian"]):
+    if X.ndim == 1:
+        X = X[:, np.newaxis]
+    if Y.ndim == 1:
+        Y = Y[:, np.newaxis]
+    res = dHSIC.dhsic(X=X, Y=Y, kernel=kernel)
+
+    return res

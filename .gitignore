@@ -137,4 +137,4 @@ results/
 results_backup/
 backup/
 lightning_logs/
-DeepGMM/
+experiments/DeepGMM/

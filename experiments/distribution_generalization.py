@@ -4,8 +4,11 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from kernel import RBFKernel
-from model import PredPolyRidge, LinearModel, train_HSIC_IV
+
+from helpers.trainer import train_HSIC_IV
+from models.hsicx import LinearHSICX
+from models.kernel import RBFKernel
+from models.baselines import PredPolyRidge
 from rpy2.robjects import numpy2ri
 from rpy2.robjects import pandas2ri
 import rpy2.robjects.packages as packages
@@ -54,7 +57,7 @@ def get_res(n, intvec, causal_par, config):
     # fit Anchor Regression
     AR_coefs = train_AR(X, Y, Z)
 
-    hsic_net = LinearModel(input_dim=2,
+    hsic_net = LinearHSICX(input_dim=2,
                            lr=config['lr'],
                            lmd=config['lmd'],
                            kernel_e=kernel_e,
@@ -116,7 +119,7 @@ if __name__ == "__main__":
 
     # plotting
     melt_res_df = df_res.melt(id_vars=['IntStr'], var_name='Method', value_name='MSE')
-    melt_res_df.to_csv("results/DG_compare_df.csv", index=False)
+    melt_res_df.to_csv("../results/DG_compare_df.csv", index=False)
 
     sns.set(font_scale=1.4, style='white', palette=sns.set_palette("tab10"))
 
@@ -130,6 +133,6 @@ if __name__ == "__main__":
     plt.yscale('log')
     plt.xlabel(r"Intervention strength $(i)$")
     plt.savefig(
-        'results/DG_compare.pdf',
+        '../results/DG_compare.pdf',
         bbox_inches="tight")
     plt.close()
